@@ -1,0 +1,174 @@
+---
+title: "Práctico 2 - Classe 05 de Mayo"
+author: "Marcelo Cena"
+date: "Mayo de 2018"
+output: html_document
+  slidy_presentation: default
+  beamer_presentation: default
+  ioslides_presentation: default
+
+---
+
+###Introducción
+En los últimos años se ha mejorado notablemente la calidad de los vinos que se comercializan/Consumen, en especial despues de que se coenzaran a definir los requisitos para las llamadas DOC (denominacion de origen controlado), que abarcan todo el proceso de fabricacion del vino, desde la región donde se produce, sus prácticas de cultivo, cepaje o variedad, cosecha, industrializacion, estacionamiento y distribución, así como las características que debe cumplir el producto final () .
+En este práctico exploraremos un dataset que registra diversos aspectos generalmente evaluados por catadores profecionales, mediante métodos de clustering para determinar la relacion entre ellos al definir la calidad del producto. 
+Utilizamos el data set Kaggle "Red Wine Quality" (https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009). 
+El mismo contiene una lista de 1600 catas "ciegas" con 10 aspectos que determina la calidad del vino. Este estudio se realizó sobre catas de vinos originarios de una región de Portugal.
+ 
+
+#Exploraci??n de datos
+```{r}
+#if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, skimr, GGally, plotly, viridis, caret, randomForest, e1071, rpart, xgboost, h2o, corrplot, rpart.plot, corrgram, lightgbm)
+
+vinotinto <- read.csv("./winequality-red.csv",header=TRUE)
+```
+``
+
+#vemos los encabezados del archivo
+```{r}
+head(vinotinto)
+```
+
+#Ahora con skim le pegamos una mirada al contenido del archivo
+
+```{r}
+vinotinto %>% skim() %>% kable()
+```
+
+Veamos las correlaciones que existen entre las variables
+
+```{r}
+vinotinto %>% cor() %>% corrplot.mixed(upper = "ellipse", tl.cex=.8, tl.pos = 'lt', number.cex = .8)
+```
+
+
+#En el gráfico se pueden observar en la parte inferior de la diagonal los valores y en la parte superior con un gráfico de temperatura las relaciones entre las diferentes variables.
+
+#Intentaremos ver cuales son las que más influyen en la calidad del vino...podemos asumir, viendo el gráfico anterior que los clorhidridos y los sulfatos no inluyen en la relacion 
+
+```{r}
+vinotinto %>% 
+  mutate(quality = as.factor(quality)) %>% 
+  select(-c(sulphates, chlorides)) %>% 
+  ggpairs(aes(color = quality, alpha=0.4),
+          columns=1:9,
+          lower=list(continuous="points"),
+          upper=list(continuous="blank"),
+          axisLabels="none", switch="both")
+```
+
+
+#normalizamos usando  z-scores y analizamos de nuevo:
+
+```{r}
+vinotinto_n_zscore1 <- vinotinto
+ for(j in seq_len(ncol(vinotinto_n_zscore1))) { 
+      if (j!="12") vinotinto_n_zscore1[,j] <- scale(vinotinto_n_zscore1[,j]) 
+ } 
+vinotinto_n_zscore <- as.data.frame(vinotinto_n_zscore1)
+head(vinotinto_n_zscore)
+```
+
+#Hagamos un par de fisualizaciones para ver que variables nos conviene:
+
+
+```{r}
+vinotinto %>% 
+  plot_ly(x=~alcohol,y=~volatile_acidity,z= ~sulphates, color=~quality, hoverinfo = 'text', colors = viridis(3),
+          text = ~paste('Calidad:', quality,
+                        '<br>Alcohol:', alcohol,
+                        '<br>Acidez volatil:', volatile_acidity,
+                        '<br>Sulfatos:', sulphates)) %>% 
+  add_markers(opacity = 0.8) %>%
+  layout(title = "3D Calidad del vino",
+         annotations=list(yref='paper',xref="paper",y=1.05,x=1.1, text="quality",showarrow=F),
+         scene = list(xaxis = list(title = 'Alcohol'),
+                      yaxis = list(title = 'Acidez volatil'),
+                      zaxis = list(title = 'Sulfatos')))
+                      
+```
+
+```{r}
+vinotinto %>% 
+  plot_ly(x=~alcohol,y=~pH,z= ~citric_acid, color=~quality, hoverinfo = 'text', colors = viridis(3),
+          text = ~paste('Calidad:', quality,
+                        '<br>Alcohol:', alcohol,
+                        '<br>PH:', pH,
+                        '<br>Acido Citrico:', citric_acid)) %>% 
+  add_markers(opacity = 0.8) %>%
+  layout(title = "3D Calidad del Vino",
+         annotations=list(yref='paper',xref="paper",y=1.05,x=1.1, text="quality",showarrow=F),
+         scene = list(xaxis = list(title = 'Alcohol'),
+                      yaxis = list(title = 'PH'),
+                      zaxis = list(title = 'Acido Citrico')))
+                      
+```
+                      
+
+```{r}
+vinotinto %>% 
+  plot_ly(x=~total_sulfur_dioxide,y=~fixed_acidity,z= ~residual_sugar, color=~quality, hoverinfo = 'text', colors = viridis(3),
+          text = ~paste('Calidad:', quality,
+                        '<br>Dioxido de sulfuro total:', total_sulfur_dioxide,
+                        '<br>Acidez:', fixed_acidity,
+                        '<br>Azucar residual:', residual_sugar)) %>% 
+  add_markers(opacity = 0.8) %>%
+  layout(title = "3D Calidad del Vino",
+         annotations=list(yref='paper',xref="paper",y=1.05,x=1.1, text="quality",showarrow=F),
+         scene = list(xaxis = list(title = 'Dioxido de sulfuro total'),
+                      yaxis = list(title = 'Acidez'),
+                      zaxis = list(title = 'Azucar Residual')))
+                      
+```
+    
+    
+#Utilizaremos los métodos elbow, silhouette y gap_stat para determinar el némero optimo de clusters.
+# - El método Elbow busca medir el resultado de la funcion de costo del método de clustering a medida que aumento el numero de clusters.
+# - El método silhouette mide cuan similar cada objeto es a su propio cluster y cuan distante de los otros clusters, luego compara el promedio de todas estos valores a medida que aumento el número de clusters.
+# - El método gap_stat compara para diferentes valores de k, la varianza total intra-cluster observada frente al valor esperado acorde a una distribución uniforme de referencia. La estimación del número óptimo de clusters es el valor k con el que se consigue maximizar el estadístico gap, es decir, encuentra el valor de k con el que se consigue una estructura de clusters lo más alejada posible de una distribución uniforme aleatoria. Este método puede aplicarse a cualquier tipo de clustering.
+
+
+
+```{r}
+library(mclust)
+library(cluster)
+library(factoextra)
+
+#Elbow method
+set.seed(97)
+fviz_nbclust(vinotinto_n_zscore1[,2:8], kmeans, nstart = 30,  method = "wss")
+fviz_nbclust(vinotinto_n_zscore1[,2:8], kmeans, nstart = 30,  method = "silhouette")
+fviz_nbclust(vinotinto_n_zscore1[,2:8], kmeans, nstart = 30, method = "gap_stat", nboot = 500)
+```
+
+# dados los valores aquí observados, creemos que K entre 2 y 4 es el k que mejor se comporta.
+
+
+
+#Realizaremos 40 procesos de kmeans comenzando desde puntos aleatorios para evitar caer en minimos locales.
+
+```{r}
+set.seed(97)
+mod_vino <- kmeans(x=vinotinto_n_zscore1[,2:8], centers=5, iter.max=500, nstart=40)
+```
+
+
+```{r}
+plot(vinotinto_n_zscore1[,2:8], col=mod_vino$quality)
+```
+#Agregamos los clusters como columna para poder contrastar contra la informacion del dataframe
+```{r}
+vinotinto_n_zscore1["quality"] <- mod_vino$quality
+head(vinotinto_n_zscore1)
+mod_vino$centers
+```
+# Analizaremos que estilos de cerveza han quedado dentro de cada cluster
+```{r}
+clust_1 <- subset(vinotinto_n_zscore1, cluster == 1)$style
+clust_2 <- subset(vinotinto_n_zscore1, cluster == 2)$style
+clust_3 <- subset(vinotinto_n_zscore1, cluster == 3)$style
+clust_4 <- subset(vinotinto_n_zscore1, cluster == 4)$style
+clust_5 <- subset(vinotinto_n_zscore1, cluster == 5)$style
+mod_beer$centers
+```

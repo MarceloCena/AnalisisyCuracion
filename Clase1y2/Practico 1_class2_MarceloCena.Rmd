@@ -1,0 +1,219 @@
+---
+title: "Práctico 1 -Clase 4 de Mayo"
+author: "Marcelo Cena"
+date: "Mayo de 2018"
+output:
+  slidy_presentation: default
+  beamer_presentation: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+***
+### Diagnosticando Cancer:
+
+* Investigaremos ahora la utilidad del ML para detectar cancer aplicando 
+el algoritmo kNN a mediciones de biopsias de mujeres, utilizando el 
+conjunto de datos  "Breast Cancer Winscosin Diagnostic" del
+UCI ML Repository <http://archive.ics.uci.edu/ml> que incluye 569 ejemplos
+de biopsias, en cada una se midieron 32 features  (diferentes caracteristicas de las nucleos celulares) y el diagnostico codificado como
+M (Maligno) o B (Benigno).
+
+```{r echo=TRUE}
+data <- read.csv("http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data",header=FALSE)
+data <- data[-1]
+str(data)
+```
+
+
+```{r echo=TRUE}
+normalize <- function(x) {
+  return ((x-min(x))/(max(x)-min(x)))
+}
+data_n <- as.data.frame(lapply(data[2:31], normalize))
+summary(data_n$V3)
+summary(data_n$V8)
+```
+
+
+***
+### Entrenando un clasificador:
+
+Notese que dichos conjuntos de datos deben ser representativos del conjunto de datos, i.e. **metodos de muestreo aleatorios**!
+
+```{r echo=TRUE}
+data_train <- data_n[1:469, ]
+data_test  <- data_n[470:569, ] 
+```
+
+Excluimos la variable objetivo (Benigno/Maligno), pero necesitamos guardar estos factores en vectores!
+
+```{r echo=TRUE}
+data_train_labels <- data[1:469, 1]
+data_test_labels  <- data[470:569, 1]
+```
+
+***
+### Ejercicios.
+
+
+Los valores correctos estan en la diagonal de la matriz, 98% de precision para unas pocas lineas de R!
+
+
+```{r echo=TRUE}
+library(class)
+data_test_pred <- knn(train=data_train, cl=data_train_labels, test=data_test, k=21)
+
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred, prop.chisq = FALSE)
+```
+
+***
++ Mejore el rendimiento utilizando una normalizacion con z-scores provista por la funcion scale() de R.
+
+**Aplicamos normalizacion Z-score**
+
+
+```{r echo=TRUE}
+library(class)
+mean_data <- as.data.frame(lapply(data[2:31], mean))
+sd_data <- as.data.frame(lapply(data[2:31], sd))
+
+data_n <- as.data.frame(scale(data[2:31], center=mean_data, scale=sd_data))
+summary(data_n$V3)
+summary(data_n$V8)
+```
+
+```{r echo=TRUE}
+library(class)
+data_test_pred <- knn(train=data_train, test=data_test, cl=data_train_labels, k=21)
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred, prop.chisq = FALSE)
+```
+
+
+
+***
++ Pruebe algunos valores alternativos de k=1, 5,  11, 15, 21 y seleccione el mejor valor de k.
+
+```{r echo=TRUE}
+library(class)
+data_test_pred1 <- knn(train=data_train, test=data_test, cl=data_train_labels, k=1)
+
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred1, prop.chisq = FALSE)
+```
+***
+```{r echo=TRUE}
+library(class)
+data_test_pred5 <- knn(train=data_train, test=data_test, cl=data_train_labels, k=5)
+
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred5, prop.chisq = FALSE)
+```
+***
+```{r echo=TRUE}
+library(class)
+data_test_pred11 <- knn(train=data_train, test=data_test, cl=data_train_labels, k=11)
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred11, prop.chisq = FALSE)
+```
+***
+```{r echo=TRUE}
+library(class)
+data_test_pred15 <- knn(train=data_train, test=data_test, cl=data_train_labels, k=15)
+
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred15, prop.chisq = FALSE)
+```
+***
+```{r echo=TRUE}
+library(class)
+data_test_pred21 <- knn(train=data_train, test=data_test, cl=data_train_labels, k=21)
+
+library(gmodels)
+CrossTable(x=data_test_labels, y=data_test_pred21, prop.chisq = FALSE)
+```
+***
+Ahora verificamos cual predice mejor para casos benignos:
+```{r}
+# Cargamos en un dataframe resultados para cada valor de k de:
+# clasificaciones realizadas correctamente -> ok_clasf
+# clasificaciones realizadas incorrectamente -> miss_clasf
+
+k = c(1,5,11,15,21)
+miss_clasf = c(0.065, 0.039, 0.013, 0.00, 0.0)
+ok_clasf = c(0.935, 0.961, 0.987, 1.00, 1.00)
+clas <- data.frame(k, miss_clasf, ok_clasf) 
+plot(clas$k, clas$ok_clasf, type='l')
+```
+
+Ahora verificamos cual predice mejor para casos malignos:
+```{r}
+# Cargamos en un dataframe resultados para cada valor de k de:
+# clasificaciones realizadas correctamente -> ok_clasf
+# clasificaciones realizadas incorrectamente -> miss_clasf
+
+km = c(1,5,11,15,21)
+miss_clasfm = c(0.087, 0.00, 0.043, 0.087, 0.087)
+ok_clasfm = c(0.913, 1.00, 0.957, 0.913, 0.913)
+clasm <- data.frame(km, miss_clasfm, ok_clasfm) 
+plot(clasm$k, clasm$ok_clasf, type='l')
+```
+
+CONCLUSION:    Creo que usar K=5 es mas conveninete, ya que, Si bien la muestra cn K=5 fue la mejor para predecir los casos malignos, presentó cierta cantidad de falsos positivos (maligno) cuando en realidad el tumor era benigno. Creo que es mejor no descartar casos malignos que dar falsos positivos.
+
+***
+
++ mientras termina su merecido cafe verifique si el resultado cambia utilizando paciente elegidos aleatoriamente para el conjunto de validacion.
+
+
+```{r}
+# seteamos la semilla
+set.seed(97)
+n <- dim(data_n)[1]
+n_training <- floor(n * .82)
+training_indicesr <- sample(x=1:n, size=n_training, replace=FALSE)
+data_trainr <- data_n[training_indicesr, ]
+data_testr  <- data_n[-training_indicesr, ]
+data_train_labelsr <- data[training_indicesr, 1]
+data_test_labelsr  <- data[-training_indicesr, 1]
+dim(data_trainr)
+dim(data_testr)
+```
+
+# correremos una vez mas knn para el k elegido (k=5)
+
+```{r echo=TRUE}
+data_test_predr <- knn(train=data_trainr, test=data_testr, cl=data_train_labelsr, k=5)
+CrossTable(x=data_test_labelsr, y=data_test_predr, prop.chisq = FALSE)
+```
+
+Al tomar de manera aleatoria los ejemplos para el conjunto de entrenamiento y para el conjunto de test vemos si bien seguimos teniendo un 100% de precision pra los casos benignos, ahora el clasificador muestra una peor clasificacion sobre tumores malignos que previamente. Probaremos cambiando la semilla una vez mas, para ver si se repite el mismo comportamiento.
+
+```{r}
+# seteamos la semilla
+
+set.seed(497)
+n <- dim(data_n)[1]
+n_training <- floor(n * .82)
+training_indicesr1 <- sample(x=1:n, size=n_training, replace=FALSE)
+data_trainr1 <- data_n[training_indicesr1, ]
+data_testr1  <- data_n[-training_indicesr1, ]
+data_train_labelsr1 <- data[training_indicesr1, 1]
+data_test_labelsr1  <- data[-training_indicesr1, 1]
+dim(data_trainr1)
+dim(data_testr1)
+```
+```{r echo=TRUE}
+data_test_predr1 <- knn(train=data_trainr1, test=data_testr1, cl=data_train_labelsr1, k=5)
+CrossTable(x=data_test_labelsr1, y=data_test_predr1, prop.chisq = FALSE)
+```
+
+Peor ahora tambien clasifica mal los casos benignos, evidentemente, la eleccion de la semilla influye grandemente en el resultado
+  
+  

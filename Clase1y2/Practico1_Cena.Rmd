@@ -1,0 +1,83 @@
+---
+title: "Práctico 1 -Clase 4 de Mayo"
+author: "Marcelo Cena"
+date: "Mayo de 2018"
+output:
+  slidy_presentation: default
+  beamer_presentation: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+## Ejercicios:
+
+Visualizacion es una herramienta muy importante para la generacion de intuicion, pero
+raramente uno tiene los datos en la forma necesaria. Frecuentemente se necesitara 
+crear nuevas variables o simplemente reordenarlas.
+
+Exploraremos ahora la manipulacion basica utilizando un conjunto de datos sobre los
+vuelos en Nueva York en 2013.
+
+```{r echo=TRUE}
+library(nycflights13)
+fligths<-nycflights13::flights
+fligths
+
+summary(flights)
+```
+
+Nombres de las columnas
+```{r}
+names(fligths)
+```
+***
+## Practico 1: Entregar un Rmd donde se encuentren todos los vuelos que:
+
+- Que arribaron con un retraso de mas de dos horas.
+```{r}
+dem2hs <- subset(flights, subset= flights$arr_delay>120)
+dem2hs
+```
+
+***
+- Que Volaron hacia Houston (IAH o HOU)
+
+```{r}
+Houston <- subset(flights, subset= flights$dest %in% c("IAH","HOU") )
+Houston
+```
+
+***
+- Que Fueron operados por United, American o Delta.
+```{r}
+carrier <- subset(flights, subset= toupper(flights$carrier) %in% c("AA" ,"UA" ,"DL"))
+carrier
+```
+
+***
+- Que Salieron en Verano (Julio, Agosto y Septiembre)
+
+```{r}
+verano <- subset(flights, subset= flights$month>=7 & flights$month<=9 )
+verano
+```
+
+***
+- Que Arribaron mas de dos horas tarde, pero salieron bien.
+
+```{r}
+latearr <- subset(flights, subset= flights$arr_delay>120 & flights$dep_delay==0)
+latearr
+```
+
+***
+- Que Salieron entre medianoche y las 6 am.
+
+```{r}
+madrugada <- subset(flights, subset= (flights$dep_time>=0 & flights$dep_time<=600) | flights$dep_time==2400 )
+madrugada
+```
